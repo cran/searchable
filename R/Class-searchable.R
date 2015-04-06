@@ -1,67 +1,84 @@
-# setClassUnion( "LogicalOrCharacter", c("logical","character") )
-  setClassUnion( "searchables", c('vector', 'list') )
-
-# A searchable object is a vector or list and has a names attribute  
-  is.searchables <- function(object) 
-    ( is.vector(object) || is.list(object) ) && ! is.null( attr(object, "names"))
-  
-#   validSearchableObject <- function(object) { 
-#     
-#     if( object@perl = TRUE && object)
-#   
-#     return(TRUE)
-#   }
-  
-  
-  # TO make hash searchable as well, it seems a second Class Union is required.
-  # library(hash)
-  # setClassUnion( "searchables2", c('searchables','hash'))
-
-#' @title searchable 
+#' @title Searchable
 #' 
 #' @description
-#' Creates a searchable class that allows for modification for searches.
-#'
-# @slot modifiers zero or more function that are used to modify the search 
-# function before performing the search. 
-#  
-# @param x,object object to be made or searchable
-# @param modifiers functions used to modify the search  
-#'  
+#' \code{searchable} makes a named object a \code{Searchable} target, optionally
+#' specifying the default search options.
+#'   
 #' @param object searchable object or object to be made searchable
-#' @param ... one or more stringr-style match modifying sunctions, See 
-#'   \code{?match.modifiers} for details.
+#' @param type character; the type of search to perform 
+#' @param ... additional arguments defining the search pattern. See 
+#'   \code{?pattern} for details.
 #'  
-# @slot ignore.case logical; whether case should be ignored
-# @slot regex logical or character; if \code{TRUE}, R's regular expression 
-# syntax is used; if \code{"perl"}, PCRE's are used. The default is to not use
-# regular expressions. 
-# 
 #' @details 
 #' 
-#' The searchable class allows for non-standard, stringr-like searches when 
-#' extracting (or replacing) objects. The following 
-#' modification are (at present) supported: \code{fixed}, 
-#' \code{ignore.case}, \code{perl} and 
-#' \code{reverse.lookup}.
+#' The searchable class allows 'stringr/i'-like searches using \code{\[} and 
+#' \code{\[<-} operators. The following search types are supported: 
 #' 
-#' Search modification can be applied either to the object being searched or 
-#' the search pattern(s). To apply them to the searched object add the modifiers
-#' to the \code{modifiers} slot of the object. These are applied after any user
-#' supplied modifiers.
+#' \itemize{ 
+#'   \item \code{std} standard R matching, the default
+#'   \item \code{regex} for regular expression matching, 
+#'   \item \code{fixed} for fixed string matching, 
+#'   \item \code{coll} for collation matching, 
+#' }
 #' 
-#' \code{searchable} is designed to be minimally invase. No modification to the
-#' object or its names are made when classing an object as searcable and if no 
-#' search modifiers are enabled, the object behaves as a regular, 
-#' "non-searchable" object.
+#' Class \code{Searchable} objects allow customizations of how R's  
+#' \code{\[} operator match objects' names. 
+#' 
+#' @section Diffences from stringr:
+#' 
+#' \code{stringr}  and \code{stringi} are general purpose string manipulations 
+#' library allowing flexible search and pattern matching against character 
+#' strings. The \code{searchable} package applies this type of matching  
+#' to objects' names using the standard \code{\[} accessor.  Thus, 
+#' 
+#'   \code{ searchable(sv)[ regex('b') ]} 
+#' 
+#' returns objects the subset of whose names contain 'b'.
+#'  
+#' Unlike \code{stringr/i}, \code{searchable} allows search specification 
+#' to applied to either the search pattern or search target. 
+#' When applied to the target, a default search method is configured. All 
+#' subsequent searches of the searchable target will use this default pattern. 
+#'   
+#' The search method can be specified with the \code{type} argument of the 
+#' \code{searchable} function or any of match-modifying functions, 
+#' e.g. \code{fixed}, \code{regex}, \code{coll}, \code{ignore.case}, etc. 
+#' See examples. 
+#' 
+#' When modifiers are applied to both target and pattern, \strong{modifers 
+#' applied to the pattern take precedence} and the target's modifiers are 
+#' disabled. 
 #' 
 #' 
-#' @section reverse.lookup:
+#' @section Differences from base R:
 #' 
-#' When performing a reverse lookup, values (not names) are searched. The 
-#' corresponding names are returned.  NOTE: this is highly experimental and only
-#' works for atomic vectors. It is uncertain how this might be applied to 
-#' recursive structures. 
+#' \code{searchable} is designed to be minimally invase. When no search types 
+#' or options are specified, mathcing defaults to R's normal behavior. 
+#' 
+#' Here are the other differnece from standard R operations: 
+#' 
+#' \itemize{
+#'  
+#'   \item \code{\$} and \item{\[\[} are unaltered by the package. It is 
+#'   unclear, how these operators might accommodate the indeterminate number of 
+#'   matches.  
+#'         
+#'   \item Searches using multiple patterns recylce the patterns, but rather 
+#'   return elements that match any of the patterns.  
+#'   
+#'   \item In base R, there is output value every element of input argument, 
+#'         \code{i}. Input elements that do not match a named element of 
+#'         \code{x} return \code{NA}. Because of the indeterminant number of 
+#'         matches given a pattern search against a \code{searchable} object, 
+#'         there is no guarantee that a search pattern have a match. If no 
+#'         matches are found, a zero-length object is returned. (This may change
+#'         to \code{NA} to be more consisitent.) 
+#'         
+#'   \item Results do not yield a Searchable object, but the superclass that
+#'         the searchable class wraps. See \strong{Value} below.
+#'          
+#' }  
+#' 
 #' 
 #' @section replacement:
 #' 
@@ -73,26 +90,22 @@
 #' Multiple dimension ojects such as data.frames, data.tables, matrices and 
 #' arrays are not supported at this time.
 #' 
-#' @section Adding new modifiers:
-#' 
-#' It is possible to add additional search modifiers ... (vignette)  
-#' 
 #' 
 #' @return 
-#'   By default, the extraction from a searchable objects is not a class 
-#'   searchable. It is assumed that in most cases, the developer will not want 
-#'   another searchable object.  
+#'   By default, extraction from a searchable objects does not produce a subset 
+#'   that is also searchable. It is assumed that in most cases, the developer 
+#'   will not want another searchable object and only wish to have the subclass.  
 #'   
 #' @note 
 #'   - Environments cannot be (easily) be made "searchable" due to the way the 
-#'   objects are implemented
+#'     they are implemented.
+#'     
 #'   - The extraction methods for searchable objects are (at present) limited to
-#'     only one pattern. This  
+#'     only one pattern. This may change in the future.  
 #'   
 #' @seealso
 #'   \code{\link{extract}}              \cr 
-#'   \code{\link[stringr]{ignore.case}} \cr
-#'   \code{\link[stringr]{perl}}        \cr
+#'   \code{\link[stringi]{stri_detect_regex}}       \cr
 #'   \code{\link{reverse.lookup}}       \cr
 #' 
 #'     
@@ -101,110 +114,91 @@
 #'   # ATOMIC VECTORS: 
 #'     v <- c( a=1, b=2, B=3, c=4, c2=5 )
 #'     sv <- searchable(v)
-#'  
-#'   # EXTRACT:
-#'     sv$a
-#'      
-#'     sv[['a']]
-#'     sv[[ ignore.case('A') ]]
-#'     
-#'     sv[ ignore.case('b') ]     
-#'     sv[ perl('c') ]
+#'       
+#'       
+#'   # FLEXIBLY FIND ELEMENTS BY NAME 
+#'     sv[ regex('c') ]
 #'     sv[ fixed('c') ]
-#'            
-#'                                       
-#'   # REPLACEMENT: 
-#'     sv$a               <- "first" 
-#'     sv[['a']]          <- "1st"  
-#'     sv[[ perl('c.') ]] <- "third"
-#'     
-#'     sv[ perl('c.?') ]   <- "3rd"
+#'
+#'     sv[ ignore.case('b') ] 
+#'                                                                                                                                                                                                                                                                                                                            
+#'
+#'   # FLEXIBLY REPLACEMENT ELEMENTS BY NAME  
+#'     sv[ regex('c.?') ]   <- "3rd"
 #'   
 #'   
-#'   # MODIFIERS TO SEARCH TARGET/OBJECT
-#'     sv <- searchable(v, ignore.case )         
-#'     sv$A
+#'   # SET DEFAULT SEARCH FOR TARGET/OBJECT
+#'     sv <- searchable(v, case_insensitive = TRUE )         
 #'     sv['b']
 #'     sv['B']
 #'   
-#'   
-#'   # RECURSIVE LISTS:
+#'     sv <- regex(sv)  
+#'     sv['c']  
+#'
+#'     sv <- ignore.case(sv)    
+#'     sv['b']                                                                    
+#'     sv['c']                  # st  
+#'                                        
+#'
+#'   # USE ON (RECURSIVE) LISTS:
 #'     l <- list( a=1, b=2, c=3 )
 #'     sl <- searchable(l)                
-#'     sl[["b"]]
-#'     sl[[ ignore.case("B") ]] 
+#'     sl["b"]
+#'     sl[ ignore.case("B") ] 
+#'     
 #'     
 #'   # USE WITH MAGRITTR   
 #'    \dontrun{
-#'     sl[[ "B"  %>% ignore.case ]]
-#'     "b" %>% sl[[.]]
-#'     "B" %>% ignore.case %>% sl[[ . ]]
+#'     sl[ "B"  %>% ignore.case ]
+#'     "b" %>% sl[.]
+#'     "B" %>% ignore.case %>% sl[.]
 #'    }
 #'    
 #'      
 #' @rdname searchable
-#' @exportClass searchable
-#' @import methods
-#' @export searchable 
+#' @exportClass Searchable
+#' @export
+#' @include Class-Searchables.R
 
-  setClass( 'searchable' 
-    , representation = representation( 
-        'searchables'
-        # , modifiers = 'list'
-        # , ignore.case = 'logical'
-        # , perl        = 'logical'
-        #, fixed       = 'logical'
-        # , exact       = 'logical'  # This is the default
-      )  
-    , prototype = prototype( vector() ) # , ignore.case = FALSE, perl = FALSE, fixed = FALSE ) 
-    , contains = 'searchables'  #searchables2
-  )
+   Searchable <- setClass( 'Searchable'
+     , contains = 'Searchables' 
+     , representation = representation( 'Searchables', type='character', options='list')
+     , prototype( NA_character_, type = 'std', options=list() ) 
+   )
 
+   # setClass( 'Searchable', contains = 'SearchableOrPattern' )
+    
 
+# CONSTRUCTOR
+# NB. compare with pattern 
 #' @rdname searchable
 #' @export
-  
-searchable <- function( object, ...) { 
+ 
+  searchable <- function( object, type='std', ... ) { 
+    
+    # TRAP NON-NAMED OBJECTS
+    if( object  %>% attr('names')  %>% is.null ) 
+      stop( 'Only objects with a names attribute can be made searchable.')
+    
+    return( 
+      new( 'Searchable', object, type=type, options=list(...) )  
+    )
+  }  
 
-  ret <- new( 'searchable', object )
   
-  li <- list(...)
-  if( length(li) > 0 ) 
-    for( elem in li )  
-      if( is.function(elem) ) 
-        ret <- elem(ret) else
-        stop( "argument is not a match modifier." )
-   
-  return(ret)
-  
-}
-   
-  
+
 # METHOD: show
 #' @rdname searchable
-  setMethod('show', 'searchable', 
+
+  setMethod('show', 'Searchable', 
     function(object) {
       
-      # CREATE LIST OF MATCH MODIFIERS USED
-      mods <- unlist( .get.modifiers(object) )
-      if ( is.null(mods) )
-        mods <- "exact" else 
-        mods <- paste( names( which( mods  ) ), collapse = ", " )
-      
-      cat( class(object), class(object@.Data), "using",  mods, ":\n", sep = " " )
-   
-      val <- object@.Data 
-      
+      cat( 'searchable ' ) 
+      cat( class(object@.Data) )
+      cat( ' object using', .describe_pattern(object) )       
       show( object@.Data[ 1:length(object@.Data) ] )  # REMOVE attributes
       invisible(NULL)
       
     }
   )
-  
-
-#' is.searchable 
-#' @rdname searchable
-#' @export 
-  is.searchable <- function(object) is(object,'searchable')
-  
   
